@@ -1,2 +1,2 @@
-# fyp-ica
-FYP Project C300
+# Intelligent Calisthenics Assistant
+
