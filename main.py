@@ -1,4 +1,4 @@
-from flask import Flask, render_template, request, url_for, redirect
+from flask import Flask, render_template, request, url_for, redirect, session as fsession
 import logging
 from flask_sqlalchemy import SQLAlchemy
 from flask_login import UserMixin, login_user, LoginManager, login_required, logout_user, current_user
@@ -6,63 +6,39 @@ from flask_wtf import FlaskForm
 from wtforms import StringField, PasswordField, SubmitField
 from wtforms.validators import InputRequired, Length, ValidationError
 from flask_bcrypt import Bcrypt
-#from cassandra.cluster import Cluster
+from cassandra.cluster import Cluster
+from cassandra.auth import PlainTextAuthProvider
 from werkzeug.security import generate_password_hash, check_password_hash
+from datetime import datetime
+from cassandra.query import SimpleStatement
+from flask_login import login_required
+from flask_session import Session
+from cassandra import ConsistencyLevel
+from cassandra.policies import DCAwareRoundRobinPolicy
+
+
+import uuid
+import hashlib
+
+
 
 app = Flask(__name__)
-bcrypt = Bcrypt(app)
-app.config['SQLALCHEMY_DATABASE_URI'] = 'sqlite:///database.db'
-app.config['SECRET_KEY'] = 'thisisasecretkey'
-db = SQLAlchemy(app)
+app.secret_key = '_5#y2L"F4Q8z\n\xec]/'
+app.config['SESSION_TYPE'] = 'cassandra'  # You can change the session type based on your requirements
+Session(app)
+cloud_config= {
+  'secure_connect_bundle': 'C:\secure-connect-fyp-ica.zip'
+}
+auth_provider = PlainTextAuthProvider('RxnkOimyTprpDRaWZyEfWZTz', '5ydlP0.DQvbKjBv-GTt7tWxQnpBk5A+Kg84d3MZojxSNo8wciB+i0RnzYL_MIQgKgpCZEp9PH5Cdhf,s-1mJdEweY9N2vClPu+EqSlfmG1vHuAuw,9eS7k.UzrDOwT8W')
+cluster = Cluster(cloud=cloud_config, auth_provider=auth_provider)
+session = cluster.connect()
 
+row = session.execute("select release_version from system.local").one()
+if row:
+  print(row[0])
+else:
+  print("An error occurred.")
 
-login_manager = LoginManager()
-login_manager.init_app(app)
-login_manager.login_view = 'login'
-
-#cluster = Cluster(['<cassandra_host>'], port=7000)
-#session_db = cluster.connect('<keyspace_name>')
-
-class User(db.Model, UserMixin):
-    id = db.Column(db.Integer, primary_key=True)
-    username = db.Column(db.String(20), nullable=False, unique=True)
-    password = db.Column(db.String(80), nullable=False)
-with app.app_context():
-    db.create_all()
-
-@login_manager.user_loader
-def load_user(user_id):
-    if user_id is None:
-        return None
-    return User.query.get(int(user_id))
-
-
-
-class RegisterForm(FlaskForm):
-    username = StringField(validators=[
-                           InputRequired(), Length(min=4, max=20)], render_kw={"placeholder": "Username"})
-
-    password = PasswordField(validators=[
-                             InputRequired(), Length(min=8, max=20)], render_kw={"placeholder": "Password"})
-
-    submit = SubmitField('Register')
-
-    def validate_username(self, username):
-        existing_user_username = User.query.filter_by(
-            username=username.data).first()
-        if existing_user_username:
-            raise ValidationError(
-                'That username already exists. Please choose a different one.')
-
-
-class LoginForm(FlaskForm):
-    username = StringField(validators=[
-                           InputRequired(), Length(min=4, max=20)], render_kw={"placeholder": "Username"})
-
-    password = PasswordField(validators=[
-                             InputRequired(), Length(min=8, max=20)], render_kw={"placeholder": "Password"})
-
-    submit = SubmitField('Login')    
 
 @app.route('/sockets')
 def pose_sockets():
@@ -83,6 +59,7 @@ def count_sit_ups():
 # master-minion simultaneous video capturing
 @app.route('/')
 def home():
+    
     return render_template('home.html')
 
 @app.route('/vidmaster')
@@ -121,73 +98,97 @@ def contact():
     return render_template('contact.html')
 
 #Login Page
-@app.route('/login', methods=['GET', 'POST'])
+@app.route('/login', methods=['GET'])
 def login():
-    if request.method == 'POST':
-        username = request.form['username']
-        password = request.form['password']
-
-        # Retrieve user data from the database
-        result = session_db.execute(
-            "SELECT * FROM users WHERE username = %s", (username,))
-        user = result.one()
-
-        # Check if user exists and password is correct
-        if user is None or not check_password_hash(user.password, password):
-            return render_template('login.html', error='Invalid credentials')
-
-        # Set session variables and redirect to the homepage
-        session['username'] = user.username
-        session['logged_in'] = True
-        return redirect(url_for('home'))
-
     return render_template('login.html')
 
+#Validating of credentials
+@app.route('/login', methods=['POST'])
+def login_post():
+    fsession['username'] = request.form.get('username')
+    name = fsession['username']
+    password = request.form['password']
+    login_hash = hashlib.sha1(password.encode()).hexdigest()
+    # Perform Cassandra query to validate the credentials
+    query = "SELECT * FROM fyp.users WHERE name = %s AND password = %s ALLOW FILTERING"
+    result = session.execute(query, (name, login_hash))
+
+
+    
+    if result.one():
+        
+        # Valid credentials, perform login logic
+        return f"Login successful<br><a href='/'>Welcome {name}, Go to the Home Page</a>"
+        
+
+    else:
+        # Invalid credentials, show error message
+        return "Invalid username or password"
 
 
 @app.route('/dashboard', methods=['GET', 'POST'])
-@login_required
 def dashboard():
-    return render_template('dashboard.html')
+     # Render the dashboard template with the username
+     return render_template('dashboard.html')
+    
 
 
 @app.route('/logout')
 def logout():
-    # Clear session variables and redirect to the homepage
-    session.clear()
-    return redirect(url_for('home'))
+    
+    return redirect(url_for('login'))
+
+@app.route('/register', methods=['GET'])
+def register():
+    return render_template('register.html')
+
+@app.route('/register', methods=['POST'])
+def register_post():
+    new_uuid = uuid.uuid4()
+    username = request.form['username']
+    password = request.form['password']
+    user_id = new_uuid
+    yob = request.form['yob']
+    age = int(request.form['age'])  # Convert age to integer
+    
+    password_hash = hashlib.sha1(password.encode()).hexdigest()
+    # Perform Cassandra query to check if the username already exists
+    query = "SELECT * FROM fyp.users WHERE name = %s ALLOW FILTERING"
+    result = session.execute(query, (username,))
+    
+    if result.one():
+        return "Username already exists<br><a href='/register'>Please Try Again</a>"
+    else:
+        # Perform Cassandra query to insert the new user into the users table
+        query = "INSERT INTO fyp.users (id, age, name, password, yob) VALUES (%s, %s, %s, %s, %s)"
+        session.execute(query, (user_id, age, username, password_hash, yob))
+        return "Registration successful<br><a href='/login'>Log In Now</a>"
+
+@app.route('/insert_vid', methods=['POST'])
+def insert_video():
+    new_rid = uuid.uuid4()
+    rid = new_rid
+    image = request.files['image']
+    image.save("C:/fyp-ica/image/" + image.filename)
+    imagedir = "C:/fyp-ica/image/" + image.filename
+    video = request.files['video']
+    video.save('C:/fyp-ica/video/' + video.filename)
+    viddir = "C:/fyp-ica/video/" + video.filename
+    query = "INSERT INTO fyp.score (rid, badcount, chart, excount, exercise, goodcount, poseresult, user_id,video) VALUES ($s, $s, $s,$s, $s, $s,$s, $s, $s)"
+    session.execute(rid, badcount, imagedir, excount, exercuse, goodcount, poseresult, user_id, viddir)
+    return 'Video uploaded successfully'
 
 
-@app.route('/register', methods=['GET', 'POST'])
-def signup():
-    if request.method == 'POST':
-        username = request.form['username']
-        email = request.form['email']
-        password = request.form['password']
-
-        # Check if user already exists
-        result = session_db.execute(
-            "SELECT * FROM users WHERE username = %s", (username,))
-        if result.one() is not None:
-            return render_template('signup.html', error='User already exists')
-
-        # Hash password and store user data in the database
-        hashed_password = generate_password_hash(password)
-        session_db.execute(
-            """
-            INSERT INTO users (username, email, password)
-            VALUES (%s, %s, %s)
-            """,
-            (username, email, hashed_password)
-        )
-
-        # Set session variables and redirect to the homepage
-        session['username'] = username
-        session['logged_in'] = True
-        return redirect(url_for('home'))
-
-    return render_template('signup.html')
-
+@app.route('/insert', methods=['POST'])
+def insert_record():
+    new_rid = uuid.uuid4()
+    rid = new_rid
+    image = request.files['image']
+    image.save("C:/fyp-ica/image/" + image.filename)
+    imagedir = "C:/fyp-ica/image/" + image.filename
+    query = "INSERT INTO fyp.score (rid, badcount, chart, excount, exercise, goodcount, poseresult, user_id,video) VALUES ($s, $s, $s,$s, $s, $s,$s, $s, NULL)"
+    session.execute(rid, badcount, imagedir, excount, exercuse, goodcount, poseresult, user_id)
+    return 'Records uploaded successfully'
 
 @app.errorhandler(500)
 def server_error(e):
@@ -198,10 +199,9 @@ def server_error(e):
     """.format(e), 500
     
 if __name__ == '__main__':
-    # This is used when running locally. Gunicorn is used to run the
-    # application on Google App Engine. See entrypoint in app.yaml.
-    app.run(host='127.0.0.1', port=8080, debug=True)
     
+    app.run(host='0.0.0.0', port=5000)
+
 
 
 
