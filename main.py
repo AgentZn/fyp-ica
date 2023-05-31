@@ -24,7 +24,7 @@ import hashlib
 
 app = Flask(__name__)
 app.secret_key = '_5#y2L"F4Q8z\n\xec]/'
-app.config['SESSION_TYPE'] = 'cassandra'  # You can change the session type based on your requirements
+app.config['SESSION_TYPE'] = 'filesystem'  # You can change the session type based on your requirements
 Session(app)
 cloud_config= {
   'secure_connect_bundle': 'C:\secure-connect-fyp-ica.zip'
@@ -50,10 +50,12 @@ def pose_tfjs():
 
 @app.route('/push_up')
 def count_push_ups():
+    sessionID = fsession['sessID']
     return render_template('count_push_ups.html')
 
 @app.route('/sit_up')
 def count_sit_ups():
+    sessionID = fsession['sessID']
     return render_template('count_sit_ups.html')
 
 # master-minion simultaneous video capturing
@@ -85,16 +87,19 @@ def vid_sample_ios():
 #Team Member pages
 @app.route('/member')
 def member():
+    sessionID = fsession['sessID']
     return render_template('project_member.html')
 
 #About Page
 @app.route('/about')
 def about():
+    sessionID = fsession['sessID']
     return render_template('about.html')
 
 #Contact Page
 @app.route('/contact')
 def contact():
+    sessionID = fsession['sessID']
     return render_template('contact.html')
 
 #Login Page
@@ -105,20 +110,24 @@ def login():
 #Validating of credentials
 @app.route('/login', methods=['POST'])
 def login_post():
-    fsession['username'] = request.form.get('username')
-    name = fsession['username']
+    fname = request.form['username']
     password = request.form['password']
     login_hash = hashlib.sha1(password.encode()).hexdigest()
     # Perform Cassandra query to validate the credentials
     query = "SELECT * FROM fyp.users WHERE name = %s AND password = %s ALLOW FILTERING"
-    result = session.execute(query, (name, login_hash))
+    result = session.execute(query, (fname, login_hash))
 
 
     
     if result.one():
-        
+        row = result.one()
+        fsession['username'] = fname
+        name = fsession['username']
+        fsession['sessID'] = row.id
+        sessionID = fsession['sessID']
         # Valid credentials, perform login logic
-        return f"Login successful<br><a href='/'>Welcome {name}, Go to the Home Page</a>"
+        
+        return f"Login successful<br><a href='/'>Welcome {name}, Go to the Home Page</a><br><a href='/logout'>Logout</a>"
         
 
     else:
@@ -135,7 +144,7 @@ def dashboard():
 
 @app.route('/logout')
 def logout():
-    
+    session.clear()
     return redirect(url_for('login'))
 
 @app.route('/register', methods=['GET'])
@@ -144,10 +153,19 @@ def register():
 
 @app.route('/register', methods=['POST'])
 def register_post():
+
+    #checks for duplicate uuid
     new_uuid = uuid.uuid4()
+    uuidCheck = "SELECT * FROM fyp.users WHERE id = %s ALLOW FILTERING"
+    uuidResult = session.execute(query,(uew_uuid,))
+    if result.one():
+        new_uuid = uuid.uuid4()
+
+    #initialization of details
+    user_id = new_uuid
     username = request.form['username']
     password = request.form['password']
-    user_id = new_uuid
+    
     yob = request.form['yob']
     age = int(request.form['age'])  # Convert age to integer
     
@@ -166,6 +184,7 @@ def register_post():
 
 @app.route('/insert_vid', methods=['POST'])
 def insert_video():
+    sessionID = fsession['sessID']
     new_rid = uuid.uuid4()
     rid = new_rid
     image = request.files['image']
@@ -181,6 +200,7 @@ def insert_video():
 
 @app.route('/insert', methods=['POST'])
 def insert_record():
+    sessionID = fsession['sessID']
     new_rid = uuid.uuid4()
     rid = new_rid
     image = request.files['image']
@@ -201,18 +221,6 @@ def server_error(e):
 if __name__ == '__main__':
     
     app.run(host='0.0.0.0', port=5000)
-
-
-
-
-
-
-
-
-
-
-
-
 
 
 
