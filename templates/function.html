@@ -1,0 +1,44 @@
+
+<!DOCTYPE html>
+<html>
+<head>
+    <title>Upload Video</title>
+</head>
+<body>
+    <h1>Upload Video</h1>
+    <form action="/insert_vid" method="POST" enctype="multipart/form-data">
+        <input type="file" name="video" accept="video/*">
+        <input type="submit" value="Insert Video">
+    </form>
+    <form action="/insert" method="POST" enctype="multipart/form-data">
+        <input type="submit" value="Insert Record">
+    </form>
+</body>
+</html>
+
+@app.route('/insert_vid', methods=['POST'])
+def insert_video():
+    new_rid = uuid.uuid4()
+    rid = new_rid
+    image = request.files['image']
+    image.save("C:/fyp-ica/image/" + image.filename)
+    imagedir = "C:/fyp-ica/image/" + image.filename
+    video = request.files['video']
+    video.save('C:/fyp-ica/video/' + video.filename)
+    viddir = "C:/fyp-ica/video/" + video.filename
+    query = "INSERT INTO fyp.score (rid, badcount, chart, excount, exercise, goodcount, poseresult, user_id,video) VALUES ($s, $s, $s,$s, $s, $s,$s, $s, $s)"
+    session.execute(rid, badcount, imagedir, excount, exercuse, goodcount, poseresult, user_id, viddir)
+    return 'Video uploaded successfully'
+
+
+
+@app.route('/insert', methods=['POST'])
+def insert_record():
+    new_rid = uuid.uuid4()
+    rid = new_rid
+    image = request.files['image']
+    image.save("C:/fyp-ica/image/" + image.filename)
+    imagedir = "C:/fyp-ica/image/" + image.filename
+    query = "INSERT INTO fyp.score (rid, badcount, chart, excount, exercise, goodcount, poseresult, user_id,video) VALUES ($s, $s, $s,$s, $s, $s,$s, $s, NULL)"
+    session.execute(rid, badcount, imagedir, excount, exercuse, goodcount, poseresult, user_id)
+    return 'Records uploaded successfully'

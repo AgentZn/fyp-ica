@@ -184,7 +184,11 @@
                     <li><a href="/member">Member</a></li>
                 </ul>
                 <ul class="nav navbar-nav navbar-right">
-                    <li><a href="#"><span class="glyphicon glyphicon-log-in"></span>Login</a></li>
+                    {% if not session['sessID'] %}
+                    <li><a href="/login"><span class="glyphicon glyphicon-log-in"></span>Login</a></li>
+                    {% else %}
+                    <li><a href="/logout"><span class="glyphicon glyphicon-log-in"></span>Logout</a></li>
+                    {% endif %}
                 </ul>
             </div>
         </div>
