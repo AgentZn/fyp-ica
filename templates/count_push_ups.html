@@ -66,19 +66,13 @@
       </div>
       <div class="collapse navbar-collapse" id="myNavbar">
         <ul class="nav navbar-nav">
-          <li><a href="/">Home</a></li>
-          <li><a href="/about">About</a></li>
-          <li><a href="/contact">Contact</a></li>
-          <li class ="active"><a href="/push_up">Push Up</a></li>
-          <li><a href="/sit_up">Sit Up</a></li>
+          <li class="active"><a href="#">Home</a></li>
+          <li><a href="#">About</a></li>
+          <li><a href="#">Contact</a></li>
         </ul>
         <ul class="nav navbar-nav navbar-right">
-          {% if not session['sessID'] %}
-          <li><a href="/login"><span class="glyphicon glyphicon-log-in"></span>Login</a></li>
-          {% else %}
-          <li><a href="/logout"><span class="glyphicon glyphicon-log-in"></span>Logout</a></li>
-          {% endif %}
-      </ul>
+          <li><a href="#"><span class="glyphicon glyphicon-log-in"></span>Login</a></li>
+        </ul>
       </div>
     </div>
   </nav>
@@ -90,71 +84,6 @@
       </div>
       <div class="col-sm-8 text-left"> 
         <br>
-        
-        <div id="videoContainer">
-          <video id="video" width="640" height="480" autoplay></video>
-          <div id="countdown"></div>
-        </div>
-        <button id="startButton">Start Recording</button>
-        <script>
-          var video = document.getElementById('video');
-          var countdown = document.getElementById('countdown');
-          var startButton = document.getElementById('startButton');
-          var audio = new Audio('audio/race-start-beeps-125125.mp3');
-          var recorder;
-    
-          navigator.mediaDevices.getUserMedia({ video: true })
-            .then(function(stream) {
-              video.srcObject = stream;
-            })
-            .catch(function(error) {
-              console.log('Error:', error);
-            });
-    
-            startButton.onclick = function() {
-            startButton.style.display = 'none';
-            countdown.style.display = 'block';
-            var count = 3;
-            countdown.innerHTML = count;
-            audio.play();
-            var countdownInterval = setInterval(function() {
-                if (count > 1) {
-                count--;
-                countdown.innerHTML = count;
-                } else if (count == 1) {
-                countdown.innerHTML = "Go";
-                setTimeout(function() {
-                    clearInterval(countdownInterval);
-                    countdown.style.display = 'none';
-                    startRecording();
-                }, 1000);
-                count--;
-                }
-            }, 1000);
-            };
-    
-          function startRecording() {
-            navigator.mediaDevices.getUserMedia({ video: true })
-              .then(function(stream) {
-                video.srcObject = stream;
-                recorder = new MediaRecorder(stream);
-                recorder.start();
-                setTimeout(stopRecording, 60000); // stop recording after 60 seconds
-              })
-              .catch(function(error) {
-                console.log('Error:', error);
-              });
-          }
-    
-          function stopRecording() {
-            if (recorder && recorder.state !== 'inactive') {
-              recorder.stop();
-              video.srcObject = null;
-              startButton.style.display = 'block';
-            }
-          }
-    
-        </script>
         
         <canvas class="output_canvas_1" width="320px" height="180px" style="width:49%; height:49%"></canvas>
         <canvas class="output_canvas_2" id="output_canvas_2" width="320px" height="180px" style="width:49%; height:49%"></canvas>
@@ -171,6 +100,8 @@
 
         <br>(P) of Correct Pose&nbsp&nbsp&nbsp<span id="UndisposedMem">Undisposed Mem: 0 MB</span>
         <input type="textarea" style="width:100%" id="poseResult" name="poseResult" readonly><br>
+        <!--Adding my export button here-->
+        <button id="exportButton">Export Data</button><br>
         <br>Left Wrist (x)&nbsp<input type="textarea" style="width:20%" id="leftWrist" name="leftWrist" readonly>
         &nbsp&nbsp&nbspRight Wrist (x)&nbsp</label><input type="textarea" style="width:20%" id="rightWrist" name="rightWrist" readonly>
         
@@ -181,8 +112,11 @@
           <option value="angles">Angles</option>
         </select>
         <br><br>
-
-        <canvas id="perfChart" style="max-width:100%; max-height:30%"></canvas>
+        
+        <canvas id="perfChart" style="max-width:100%; max-height:30%"></canvas><br>
+        
+        <!--Adding my export chart button here-->
+        <button id="exportChartButton">Export Chart</button>
 
       </div>
       <div class="col-sm-2 sidenav">
@@ -908,6 +842,65 @@ function calculateAngle_2 (a, b, c, view = "Right") {
       Math.round(max_angle) + ", Min, " + Math.round(min_angle) +" / " + userAdvice;
   }
 
+//Hail mary data
+
+// Get the poseResult element and the export button
+const poseResultElement = document.getElementById("poseResult");
+const exportButton = document.getElementById("exportButton");
+
+let data = []; // keep this outside of the function
+
+function exportDataToJSONFile() {
+    let poseResultValue = poseResultElement.value.split(', ');
+
+    // Extract each parameter from the string
+    let total = parseInt(poseResultValue[0].split(': ')[1]);
+    let good = parseInt(poseResultValue[1].split(': ')[1]);
+    let bad = parseInt(poseResultValue[2].split(': ')[1]);
+    let shk = parseInt(poseResultValue[3].split(': ')[1]);
+    let hka = parseInt(poseResultValue[4].split(': ')[1]);
+    let sew = parseInt(poseResultValue[5].split(' ')[1]); // Assuming "SEW 152" follows after ", "
+    let max = parseInt(poseResultValue[6].split(': ')[1]);
+    let min = parseInt(poseResultValue[7].split(': ')[1]); // Assuming "Min: 77" follows after ", "
+    let advice = poseResultValue[8] ? poseResultValue[8].split(' / ')[1] : ""; // If exists, split by ' / '
+
+    const instance = {
+        Total: total,
+        Good: good,
+        Bad: bad,
+        SHK: shk,
+        HKA: hka,
+        SEW: sew,
+        Max: max,
+        Min: min,
+        Advice: advice,
+    };
+
+    data.push(instance); // Push each instance into the data array
+}
+
+function downloadData() {
+    // Convert data to JSON string
+    const jsonData = JSON.stringify(data, null, 2);
+
+    // Create a Blob object with the data
+    const blob = new Blob([jsonData], { type: "application/json" });
+
+    // Create a download link
+    const link = document.createElement("a");
+    link.href = URL.createObjectURL(blob);
+    link.download = "poseResult.JSON";
+    link.click();
+}
+
+// Call exportDataToJSONFile every 2000 milliseconds
+setInterval(exportDataToJSONFile, 2000);
+
+// Add an event listener that calls downloadData when the exportButton is clicked
+exportButton.addEventListener("click", downloadData);
+
+
+
   function setUpMediaPose() {
     let pose =  new Pose({locateFile: (file) => {
       return `https://cdn.jsdelivr.net/npm/@mediapipe/pose/${file}`;
@@ -1057,13 +1050,52 @@ function calculateAngle_2 (a, b, c, view = "Right") {
       perfChart.data.datasets[0].data.push(1);
       perfChart.data.datasets[0].backgroundColor.push('lime');
       perfChart.data.datasets[0].borderColor.push('lime');
+      // Play "good" audio
+      const goodSpeech = new SpeechSynthesisUtterance('Good job!' + goodCount);
+      window.speechSynthesis.cancel()
+      window.speechSynthesis.speak(goodSpeech);
     } else {
       perfChart.data.labels.push(userAdvice);
       perfChart.data.datasets[0].data.push(1);
       perfChart.data.datasets[0].backgroundColor.push('pink');
       perfChart.data.datasets[0].borderColor.push('pink');
+      // Play "bad" audio with the advice
+      const badSpeech = new SpeechSynthesisUtterance(userAdvice);
+      //But the requirements say "No Count" sooooo the issue of speaking out userAdvice
+      //which is too long and can be cut-off can be ignored
+      //at the end state the error
+      window.speechSynthesis.cancel()
+      window.speechSynthesis.speak(badSpeech);
     }
   } 
+
+  //After updatePerfChart
+  //Hail mary chart export
+
+  const exportChartButton = document.getElementById("exportChartButton");
+  exportChartButton.addEventListener("click", exportChart);
+  //whenever you click the "Export Chart" button, 
+  //the exportChart function will be called, 
+  //and it will export the chart as an image.
+  function exportChart() {
+    var canvas = document.getElementById('perfChart');  // Select the canvas with your chart
+    var dataUrl = canvas.toDataURL('image/png');   // Get chart as a data URL
+
+    // Create a link element
+    var link = document.createElement('a');
+    link.download = 'chart.png';                   // Name of the downloaded file
+    link.href = dataUrl;                           // Link to the image data
+
+    // Append link to the body
+    document.body.appendChild(link);
+
+    // Simulate click to start download
+    link.click();
+
+    // Remove link from the body
+    document.body.removeChild(link);
+    
+  }
 
 </script>
 </html>
