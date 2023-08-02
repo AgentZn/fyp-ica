@@ -101,7 +101,9 @@
         <br>(P) of Correct Pose&nbsp&nbsp&nbsp<span id="UndisposedMem">Undisposed Mem: 0 MB</span>
         <input type="textarea" style="width:100%" id="poseResult" name="poseResult" readonly><br>
         <!--Adding my export button here-->
-        <button id="exportButton">Export Data</button><br>
+        <button id="exportButton">Export Data (Whole)</button>
+        <button id="exportButtonFormatted">Export Data (Last Input Formatted)</button>
+        <br>
         <br>Left Wrist (x)&nbsp<input type="textarea" style="width:20%" id="leftWrist" name="leftWrist" readonly>
         &nbsp&nbsp&nbspRight Wrist (x)&nbsp</label><input type="textarea" style="width:20%" id="rightWrist" name="rightWrist" readonly>
         
@@ -117,6 +119,7 @@
         
         <!--Adding my export chart button here-->
         <button id="exportChartButton">Export Chart</button>
+        <button id="exportBase64Button">Export Chart (In Base64 Encoding)</button>
 
       </div>
       <div class="col-sm-2 sidenav">
@@ -842,7 +845,7 @@ function calculateAngle_2 (a, b, c, view = "Right") {
       Math.round(max_angle) + ", Min, " + Math.round(min_angle) +" / " + userAdvice;
   }
 
-//Hail mary data
+//Hail mary data export
 
 // Get the poseResult element and the export button
 const poseResultElement = document.getElementById("poseResult");
@@ -874,6 +877,8 @@ function exportDataToJSONFile() {
         Max: max,
         Min: min,
         Advice: advice,
+        exercise: "Sit Ups",
+        Timestamp: new Date().toISOString()
     };
 
     data.push(instance); // Push each instance into the data array
@@ -899,7 +904,56 @@ setInterval(exportDataToJSONFile, 2000);
 // Add an event listener that calls downloadData when the exportButton is clicked
 exportButton.addEventListener("click", downloadData);
 
+// Get the new button
+const exportButtonFormatted = document.getElementById("exportButtonFormatted");
 
+function exportLastDataToJSONFile() {
+    let poseResultValue = poseResultElement.value.split(', ');
+
+    // Extract each parameter from the string
+    let total = parseInt(poseResultValue[0].split(': ')[1]);
+    let good = parseInt(poseResultValue[1].split(': ')[1]);
+    let bad = parseInt(poseResultValue[2].split(': ')[1]);
+    let shk = parseInt(poseResultValue[3].split(': ')[1]);
+    let hka = parseInt(poseResultValue[4].split(': ')[1]);
+    let sew = parseInt(poseResultValue[5].split(' ')[1]); // Assuming "SEW 152" follows after ", "
+    let max = parseInt(poseResultValue[6].split(': ')[1]);
+    let min = parseInt(poseResultValue[7].split(': ')[1]); // Assuming "Min: 77" follows after ", "
+    let advice = poseResultValue[8] ? poseResultValue[8].split(' / ')[1] : ""; // If exists, split by ' / '
+
+    var canvas = document.getElementById('perfChart');  // Select the canvas with your chart
+    var chartBase64 = canvas.toDataURL('image/png');   // Get chart as a base64 string
+
+    const instance = {
+        badcount: bad,
+        chartBase64: chartBase64,
+        date: new Date().toISOString(),
+        excount: total,
+        exercise: "Sit Ups",
+        goodcount: good
+    };
+
+    // Create a new array and push the last instance into it
+    let lastData = [];
+    lastData.push(instance);
+
+    // Convert lastData to JSON string
+    const jsonData = JSON.stringify(lastData, null, 2);
+
+    // Create a Blob object with the lastData
+    const blob = new Blob([jsonData], { type: "application/json" });
+
+    // Create a download link
+    const link = document.createElement("a");
+    link.href = URL.createObjectURL(blob);
+    link.download = "LastPoseResult.JSON";
+    link.click();
+}
+
+// Add an event listener that calls exportLastDataToJSONFile when the exportButtonFormatted is clicked
+exportButtonFormatted.addEventListener("click", exportLastDataToJSONFile);
+
+//End of Hail mary data export
 
   function setUpMediaPose() {
     let pose =  new Pose({locateFile: (file) => {
@@ -1097,5 +1151,31 @@ exportButton.addEventListener("click", downloadData);
     
   }
 
+  const exportBase64Button = document.getElementById("exportBase64Button");
+  exportBase64Button.addEventListener("click", exportChartBase64);
+  // whenever you click the "Export Chart Base64" button, 
+  // the exportChartBase64 function will be called, 
+  // and it will export the chart as a base64 string.
+  function exportChartBase64() {
+      var canvas = document.getElementById('perfChart');  // Select the canvas with your chart
+      var dataUrl = canvas.toDataURL('image/png');   // Get chart as a data URL
+
+      // Create a Blob with the base64 string
+      var blob = new Blob([dataUrl], {type: "text/plain;charset=utf-8"});
+
+      // Create a link element
+      var link = document.createElement('a');
+      link.download = 'chart_base64.txt';           // Name of the downloaded file
+      link.href = window.URL.createObjectURL(blob); // Link to the blob
+
+      // Append link to the body
+      document.body.appendChild(link);
+
+      // Simulate click to start download
+      link.click();
+
+      // Remove link from the body
+      document.body.removeChild(link);
+  }
 </script>
 </html>
